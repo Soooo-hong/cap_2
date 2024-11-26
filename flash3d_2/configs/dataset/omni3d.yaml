@@ -1,0 +1,29 @@
+name: omni3d
+split: original
+data_path: /home/shk00315/capston2/flash3d/data/omni3d # 다른 객체 가능 
+pose_path : /home/shk00315/capston2/flash3d/data/omni3d
+depth_path : /home/shk00315/capston2/flash3d/data/omni3d/backpack_016/zoe_depth_colored
+split_path: /home/shk00315/capston2/flash3d/data/omni3d
+png: false
+
+sparse_view_num : -1
+resolution : 1
+use_mask : true
+use_depth : true 
+data_device : cuda
+init_pcd_name : origin
+white_background : false
+
+height: 256
+width: 256
+
+znear: 0.01
+zfar: 100.0
+max_fov: 100.0
+
+color_aug: false
+pad_border_aug: 0
+stereo: false
+flip_left_right: false
+
+scale_pose_by_depth: false
