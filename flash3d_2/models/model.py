@@ -5,7 +5,6 @@ import torch.nn as nn
 import cv2 
 import numpy as np 
 import os 
-from visual_hull import *
 import open3d as o3d
 from plyfile import PlyData, PlyElement
 
@@ -227,7 +226,7 @@ class GaussianPredictor(nn.Module):
                 else:
                     P = rearrange(T[:, :3, :][:, None, ...].repeat(1, self.cfg.model.gaussians_per_pixel, 1, 1),
                                   'b n ... -> (b n) ...')
-                    pos = torch.matmul(P, pos_input_frame)
+                    pos = torch.matmul(P, pos_input_frame) #[8,4,65536]
                 
                 point_clouds = {
                     "xyz": rearrange(pos[:, :3, :], "(b n) c l -> b (n l) c", n=self.cfg.model.gaussians_per_pixel),

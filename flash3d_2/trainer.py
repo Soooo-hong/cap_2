@@ -10,7 +10,7 @@ from torchmetrics.image import LearnedPerceptualImagePatchSimilarity
 from misc.depth import normalize_depth_for_display
 from misc.util import sec_to_hm_str
 from visual_hull_for_flash import *
-
+from visual_hull_train import visual_hull_training
 from models.encoder.layers import SSIM
 from evaluate import evaluate, get_model_instance
 
@@ -32,20 +32,68 @@ class Trainer(nn.Module):
         self.logger = logger
 
     def forward(self, inputs):
+        cfg = self.cfg
         outputs = self.model.forward(inputs) # coarse gaussian으로 랜더링 
-        # self.make_visual_hull(inputs,outputs) # fine gaussian으로 랜더링 
-        losses = self.compute_losses(inputs, outputs) 
+        #inputs이 배치단위로 들어옴 -> inputs[('frame_id',0)] = ['backpack_016/00174', 'backpack_016/00009', 'backpack_016/00148', 'backpack_016/00087'] 출력됨
+        losses = self.compute_losses(inputs,outputs)
+        # fine_visual_hull = self.make_visual_hull(inputs,outputs) # fine gaussian으로 랜더링 
+        # visual_hull_loss = visual_hull_training(cfg.param,fine_visual_hull)
+        # losses["loss/total"]  = sum(visual_hull_loss)/len(visual_hull_loss)
+        # losses = self.compute_losses(inputs, fine_outputs) #inputs과 fine_outputs의 loss계산 
         return losses, outputs
     
-          
+    
+    def point_to_depth_image(visual_hull_result, image_size) : 
+        x = visual_hull_result[:, 0]
+        y = visual_hull_result[:, 1]
+        z = visual_hull_result[:, 2]
+
+        # x, y 좌표를 이미지 픽셀 좌표로 변환
+        x_pixel = ((x - x.min()) / (x.max() - x.min()) * (image_size - 1)).astype(int)
+        y_pixel = ((y - y.min()) / (y.max() - y.min()) * (image_size - 1)).astype(int)
+
+        # 깊이 이미지 초기화
+        depth_image = np.zeros((image_size[0], image_size[1]))
+        
+        # 픽셀에 깊이 값 할당
+        for i in range(len(x_pixel)):
+            if 0 <= x_pixel[i] < image_size and 0 <= y_pixel[i] < image_size:
+                depth_image[y_pixel[i], x_pixel[i]] = z[i]  # 깊이 값으로 픽셀 강도 설정
+
+        return depth_image
+    
+    
+
     def make_visual_hull(self, inputs, outputs) : 
+        cfg = self.cfg
         # gaussian_mean_plus_offset = outputs["gauss_means"] #[N, C, H, W] 이라고 가정 
         # for idx in range(3) : #해당과정에서 각 offset마다 rendering image와 segment를 진행 
         #     pass
-        pred = outputs["color_gauss"] # novel view에서 rendering image 
-        act_visual_hull(pred) #--data_dir만 조정할 필요있음, input image와 저장된 pred 이미지는 sparse_txt2에 기록된 index로 접근
+        frame_ids = self.model.all_frame_ids(inputs) #[0,1,-1,2]
+        filtered_frame_ids = [id for id in frame_ids if id != 0]
+        def pad_tensor(tensor,max_length) : 
+            padding_size = max_length - tensor.size(0)
+            if padding_size > 0:
+                padding = torch.zeros(padding_size, tensor.size(1))
+                return torch.cat((tensor, padding), dim=0)
+            return tensor
+        visual_hull_results = {}
+        visual_hull_result = {}
+        fine_visual_hull = {}
         
-        
+        for frame_id in filtered_frame_ids : 
+            # pred = outputs["color_gauss",frame_id,0] # novel view에서 rendering image 
+            visual_hull_result[frame_id] = act_visual_hull(cfg, inputs,outputs,frame_id) #--data_dir만 조정할 필요있음, input image와 저장된 pred 이미지는 sparse_txt2에 기록된 index로 접근
+        for i in range(len(visual_hull_result.keys())) : 
+            max_length = max(np.asarray(visual_hull_result[filtered_frame_ids[0]][i].points).shape[0], np.asarray(visual_hull_result[filtered_frame_ids[1]][i].points).shape[0], np.asarray(visual_hull_result[filtered_frame_ids[2]][i].points).shape[0])
+
+            # visual_hull_results[f'points_{i}'] = torch.stack((pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[-1][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[1][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[2][i].points)),max_length)), dim=0)
+            # visual_hull_results[f'color_{i}'] = torch.stack((pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[-1][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[1][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[2][i].points)),max_length)), dim=0)
+            visual_hull_results[f'points_{filtered_frame_ids[i]}'] = torch.cat((pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[0]][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[1]][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[2]][i].points)),max_length)), dim=0)
+            visual_hull_results[f'color_{filtered_frame_ids[i]}'] = torch.cat((pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[0]][i].colors)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[1]][i].colors)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[2]][i].colors)),max_length)), dim=0)
+            fine_visual_hull[filtered_frame_ids[i]] = ((visual_hull_results[f'points_{filtered_frame_ids[i]}'],visual_hull_results[f'color_{filtered_frame_ids[i]}']))
+        return fine_visual_hull
+            
     def compute_reconstruction_loss(self, pred, target, losses):
         """Computes reprojection loss between a batch of predicted and target images
         """

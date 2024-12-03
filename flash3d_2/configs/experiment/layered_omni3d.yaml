@@ -24,4 +24,4 @@ model:
   xyz_scale: 0.2
   max_depth: 20
   depth_cond: true
-  
+

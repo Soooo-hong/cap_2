@@ -45,8 +45,8 @@ class Scene:
         
         # if hasattr(extra_opts, 'use_dust3r') and extra_opts.use_dust3r: # type: ignore
         #     scene_info = sceneLoadTypeCallbacks["DUSt3R"](args.source_path, args.images, args.eval, extra_opts=extra_opts) # type: ignore
-        if os.path.exists(os.path.join('/home/shk00315/capston2/flash3d/data/omni3d/backpack_016', "sparse")): # type: ignore
-            scene_info = sceneLoadTypeCallbacks["Colmap"]('/home/shk00315/capston2/flash3d/data/omni3d/backpack_016', args.images, args.eval, extra_opts=extra_opts) # type: ignore
+        if os.path.exists(os.path.join('/mnt/rcvnas2/datasets/soohong/omni3d_nukki/omni3d_mask/backpack_016', "sparse")): # type: ignore
+            scene_info = sceneLoadTypeCallbacks["Colmap"]('/mnt/rcvnas2/datasets/soohong/omni3d_nukki/omni3d_mask/backpack_016', args.images, args.eval, extra_opts=extra_opts) # type: ignore
         elif os.path.exists(os.path.join(args.source_path, "transforms_alignz_train.json")): # type: ignore
             print("Found transforms_alignz_train.json file, assuming OpenIllumination data set!")
             scene_info = sceneLoadTypeCallbacks["OpenIllumination"](args.source_path, args.white_background, args.eval, extra_opts=extra_opts) # type: ignore
@@ -94,7 +94,7 @@ class Scene:
             self.gaussians.spatial_lr_scale = self.cameras_extent
         else:
             # self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent)
-            self.gaussians.create_from_pcd(fine_visual_hull, self.cameras_extent) # fine_visual_hull -> [3,20387,3]
+            self.gaussians.create_from_pcd(fine_visual_hull, self.cameras_extent) # point_1의 shape [3, 12954, 3], fine_visual_hull -> [3,20387,3] -> 3개의 가우시안이 찍힘 
             self.gaussians.save_ply(os.path.join(self.model_path, "input.ply")) # 
 
     def save(self, iteration):

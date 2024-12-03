@@ -19,11 +19,11 @@ class GroupParams:
 
 class ParamGroup:
     def __init__(self, parser: ArgumentParser, name : str, fill_none = False):
-        with open('/home/shk00315/capston2/flash3d/configs/config.yaml','r') as yaml_file:
+        with open('/home/shk00315/cap_2/flash3d_2/configs/config.yaml','r') as yaml_file:
             self.config = yaml.safe_load(yaml_file)
         self.config['param']['name'] = [name]
         
-        with open('/home/shk00315/capston2/flash3d/configs/config.yaml','w') as yaml_file:
+        with open('/home/shk00315/cap_2/flash3d_2/configs/config.yaml','w') as yaml_file:
             yaml.dump(self.config,yaml_file,default_flow_style=False)
        
         # group = parser.add_argument_group(name)
@@ -35,7 +35,7 @@ class ParamGroup:
             t = type(value)
             value = value if not fill_none else None 
             self.config['param'][key] = value
-            with open('/home/shk00315/capston2/flash3d/configs/config.yaml','w') as yaml_file:
+            with open('/home/shk00315/cap_2/flash3d_2/configs/config.yaml','w') as yaml_file:
                 yaml.dump(self.config,yaml_file)
             # if shorthand:
             #     if t == bool:
@@ -76,7 +76,7 @@ class ModelParams(ParamGroup):
 
     def extract(self, args):
         g = super().extract(args)
-        g.source_path = os.path.abspath(g.source_path)
+        g.source_path = os.path.abspath(g.source_path) #/home/shk00315/exp/2024-11-28/23-29-40 여기로 되어있음 
         return g
 
 class PipelineParams(ParamGroup):

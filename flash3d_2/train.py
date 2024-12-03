@@ -1,6 +1,8 @@
 import os
 import pdb
+from argparse import ArgumentParser
 import time
+import sys
 import logging
 import torch
 import hydra
@@ -17,6 +19,11 @@ from lightning.fabric.strategies import DDPStrategy
 from evaluation.evaluator import Evaluator
 from datasets.util import create_datasets
 from trainer import Trainer
+
+from GaussianObject.train_gs import training
+from GaussianObject.arguments import ModelParams, OptimizationParams, PipelineParams
+from GaussianObject.gaussian_renderer import network_gui
+from GaussianObject.utils.general_utils import safe_state
 
 
 def run_epoch(fabric,
@@ -76,6 +83,12 @@ def run_epoch(fabric,
         trainer.step += 1
         lr_scheduler.step()
 
+# def visual_hull_epoch() :
+    # network_gui.init(args.ip, args.port)
+    # torch.autograd.set_detect_anomaly(args.detect_anomaly)
+    # training(args, lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, 
+    #          args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
+
 @hydra.main(
     config_path="configs",
     config_name="config",
@@ -94,7 +107,7 @@ def main(cfg: DictConfig):
     fabric = Fabric(
         accelerator="cuda",
         devices=cfg.train.num_gpus,
-        strategy=DDPStrategy(find_unused_parameters=True),
+        strategy=DDPStrategy(find_unused_parameters=False),
         precision=cfg.train.mixed_precision
     )
     fabric.launch()
@@ -103,7 +116,10 @@ def main(cfg: DictConfig):
     # set up model
     trainer = Trainer(cfg)
     model = trainer.model.to("cuda")
-    
+    for param in model.models.unidepth_extended.encoder.parameters() : 
+        param.requires_grad = False 
+    for param in model.models.unidepth_extended.unidepth.parameters() : 
+        param.requires_grad = False 
 
     # set up optimiser
     optimiser = optim.Adam(model.parameters_to_train, cfg.optimiser.learning_rate)
@@ -151,7 +167,7 @@ def main(cfg: DictConfig):
     trainer.start_time = time.time()
     for trainer.epoch in range(cfg.optimiser.num_epochs):
         run_epoch(fabric, trainer, ema, train_loader, val_loader, optimiser, lr_scheduler, evaluator)
-
+        # visual_hull_epoch()        
 
 if __name__ == "__main__":
     main()

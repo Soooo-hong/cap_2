@@ -58,7 +58,7 @@ def evaluate(model, cfg, evaluator, dataloader, device=None, save_vis=True):
     dataloader_iter = iter(dataloader)
     for k in tqdm([i for i in range(len(dataloader.dataset) // cfg.data_loader.batch_size)]):
         if save_vis:
-            new_dir = '/home/shk00315/capston2/flash3d'
+            new_dir = '/home/shk00315/cap_2/flash3d_2'
             os.chdir(new_dir)
             out_dir = Path("./visual_results/images")
             out_dir.mkdir(exist_ok=True)
@@ -73,6 +73,8 @@ def evaluate(model, cfg, evaluator, dataloader, device=None, save_vis=True):
             out_gt_dir.mkdir(exist_ok=True)
             out_dir_ply = out_out_dir / "ply"
             out_dir_ply.mkdir(exist_ok=True)
+            out_input_dir = out_out_dir/ f"input"
+            out_input_dir.mkdir(exist_ok=True)
 
         try:
             inputs = next(dataloader_iter)
@@ -111,8 +113,10 @@ def evaluate(model, cfg, evaluator, dataloader, device=None, save_vis=True):
 
                 pred = pred[0].clip(0.0, 1.0).permute(1, 2, 0).detach().cpu().numpy()
                 gt = gt[0].clip(0.0, 1.0).permute(1, 2, 0).detach().cpu().numpy()
+                input_img = inputs[('color',0,0)][0].clip(0.0, 1.0).permute(1, 2, 0).detach().cpu().numpy()
                 plt.imsave(str(out_pred_dir / f"{f_id:03}.png"), pred)
                 plt.imsave(str(out_gt_dir / f"{f_id:03}.png"), gt)
+                plt.imsave(str(out_input_dir / f"{f_id:03}.png"), input_img)
             for metric_name, v in out.items():
                 score_dict[f_id][metric_name].append(v)
         

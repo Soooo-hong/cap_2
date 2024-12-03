@@ -1,9 +1,9 @@
 name: omni3d
 split: original
-data_path: /home/shk00315/capston2/flash3d/data/omni3d # 다른 객체 가능 
-pose_path : /home/shk00315/capston2/flash3d/data/omni3d
-depth_path : /home/shk00315/capston2/flash3d/data/omni3d/backpack_016/zoe_depth_colored
-split_path: /home/shk00315/capston2/flash3d/data/omni3d
+data_path: /home/shk00315/cap_2/flash3d_2/data/omni3d # 다른 객체 가능 
+pose_path : /home/shk00315/cap_2/flash3d_2/data/omni3d
+depth_path : /home/shk00315/cap_2/flash3d_2/data/omni3d
+split_path: /home/shk00315/cap_2/flash3d_2/data/omni3d
 png: false
 
 sparse_view_num : -1
@@ -13,6 +13,17 @@ use_depth : true
 data_device : cuda
 init_pcd_name : origin
 white_background : false
+
+data_dir : ../cap_2/data/omni3d
+cube_size : 4.0
+voxel_num : 200
+sparse_id : 2
+reso : 1
+not_vis : true
+cube_size_shift_x : 0.0
+cube_size_shift_y : 0.0
+cube_size_shift_z : 0.0
+
 
 height: 256
 width: 256
