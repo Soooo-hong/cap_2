@@ -1,4 +1,3 @@
-
 config:
   exp_name: debug
   file: config.yaml
@@ -61,8 +60,7 @@ param:
   rotation_lr: 0.001
   sample_pseudo_interval: 10
   save_iterations:
-  - 7000
-  - 15000
+  - 3000
   scaling_lr: 0.005
   sh_degree: 3
   source_path: ''
@@ -70,7 +68,7 @@ param:
   start_checkpoint: null
   start_sample_pseudo: 400000
   test_iterations:
-  - 7000
+  - 3000
   transform_the_world: false
   use_dust3r: false
   use_mask: true

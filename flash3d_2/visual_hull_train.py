@@ -4,12 +4,14 @@ import uuid
 import torch 
 import torch.nn.functional as F
 import numpy as np
+from PIL import Image 
 from tqdm import tqdm 
 from random import randint
 from typing import Optional
 from torch.utils.tensorboard.writer import SummaryWriter
 from matplotlib import pyplot as plt
 from torchmetrics.functional.regression import pearson_corrcoef
+from visual_hull_for_flash import save_images
 
 from GaussianObject.arguments import ModelParams, OptimizationParams, PipelineParams
 from GaussianObject.scene import GaussianModel, Scene
@@ -22,12 +24,12 @@ from GaussianObject.gaussian_renderer import render
 
 TENSORBOARD_FOUND = True
 
-def training(cfg, fine_visual_hull,dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from) : 
+def training(cfg, fine_visual_hull,image_name,dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from) : 
     first_iter = 0
     dataset.model_path = '/home/shk00315/capston2/flash3d/data/omni3d/backpack_016' # 이건 나중에 모든 데이터셋에 접근 가능하도록 변경해야됨 
     tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree)
-    scene = Scene(fine_visual_hull,dataset,gaussians,extra_opts=cfg)
+    scene = Scene(fine_visual_hull,image_name,dataset,gaussians,extra_opts=cfg)
     gaussians.training_setup(opt)
     
     if checkpoint:
@@ -161,18 +163,21 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
         try : 
-            plt.imsave('/home/shk00315/capston2/flash3d/visual_results/images/with_visual_hull_eval/pred.png',image)
-            plt.imsave('/home/shk00315/capston2/flash3d/visual_results/images/with_visual_hull_eval/gt.png',gt_image)
+            first_image = image.permute(1,2,0)
+            second_image = gt_image.permute(1,2,0)
+            first_image = Image.fromarray((first_image.cpu().numpy() * 255).astype('uint8'))
+            second_image = Image.fromarray((second_image.cpu().numpy() * 255).astype('uint8'))
+            first_image.save(f'/home/shk00315/cap_2/flash3d_2/result_images/pred/{iteration}_pred_img.png')
+            second_image.save(f'/home/shk00315/cap_2/flash3d_2/result_images/gt/{iteration}_gt_img.png')
         except : 
                 print("Image did not download") 
-                print(image.shape)
         if tb_writer:
             tb_writer.add_histogram("scene/opacity_histogram", scene.gaussians.get_opacity, iteration)
         torch.cuda.empty_cache()
                 
 def cal_loss(opt, args, image, render_pkg, viewpoint_cam, bg, silhouette_loss_type="bce", mono_loss_type="mid", tb_writer: Optional[SummaryWriter]=None, iteration=0):
     gt_image = viewpoint_cam.original_image.to(image.dtype).cuda()
-    if opt.random_background:
+    if opt.random_background: # 안거침 
         gt_image = gt_image * viewpoint_cam.mask + bg[:, None, None] * (1 - viewpoint_cam.mask).squeeze()
     Ll1 = l1_loss(image, gt_image)
     Lssim = (1.0 - ssim(image, gt_image))
@@ -258,14 +263,16 @@ def prepare_output_and_logger(args):
         print("Tensorboard not available: not logging progress")
     return tb_writer
 
-def visual_hull_training(cfg,fine_visual_hull) : 
+def visual_hull_training(cfg,fine_visual_hull,image_name) : 
     lp = ModelParams(cfg)
     op = OptimizationParams(cfg)
     pp = PipelineParams(cfg)
     network_gui.init(cfg.ip, cfg.port)
     losses = []
-    for visual_hull in fine_visual_hull.values() : 
-        loss = training(cfg, visual_hull,lp.extract(cfg), op.extract(cfg), pp.extract(cfg), cfg.test_iterations, 
-                cfg.save_iterations, cfg.checkpoint_iterations, cfg.start_checkpoint, cfg.debug_from)
-        losses.append(loss)
+    for visual_hulls in fine_visual_hull.values() :  #visual_hulls = ((b1_points,b2_points),(b1_colors,b2_colors))
+        for idx in range(len(visual_hulls)) :
+            visual_hull = (visual_hulls[0][idx],visual_hulls[1][idx])
+            loss = training(cfg, visual_hull,image_name,lp.extract(cfg), op.extract(cfg), pp.extract(cfg), cfg.test_iterations, 
+                    cfg.save_iterations, cfg.checkpoint_iterations, cfg.start_checkpoint, cfg.debug_from)
+            losses.append(loss)
     return losses

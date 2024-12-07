@@ -12,9 +12,9 @@ use_mask : true
 use_depth : true 
 data_device : cuda
 init_pcd_name : origin
-white_background : false
+white_background : true
 
-data_dir : ../cap_2/data/omni3d
+data_dir : /home/shk00315/cap_2/flash3d_2/result_images
 cube_size : 4.0
 voxel_num : 200
 sparse_id : 2

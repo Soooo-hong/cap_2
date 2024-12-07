@@ -24,7 +24,7 @@ class Scene:
 
     gaussians : GaussianModel
 
-    def __init__(self, fine_visual_hull, args : ModelParams, gaussians : GaussianModel, load_iteration=None, shuffle=False, resolution_scales=[1.0], extra_opts=None, load_ply=None):
+    def __init__(self, fine_visual_hull,image_name, args : ModelParams, gaussians : GaussianModel, load_iteration=None, shuffle=False, resolution_scales=[1.0], extra_opts=None, load_ply=None):
         """b
         :param path: Path to colmap scene main folder.
         """
@@ -32,7 +32,7 @@ class Scene:
         self.loaded_iter = None
         self.gaussians = gaussians
 
-        if load_iteration and load_ply is None:
+        if load_iteration and load_ply is None: # 통과안됨 
             if load_iteration == -1:
                 self.loaded_iter = searchForMaxIteration(os.path.join(self.model_path, "point_cloud"))
             else:
@@ -45,8 +45,8 @@ class Scene:
         
         # if hasattr(extra_opts, 'use_dust3r') and extra_opts.use_dust3r: # type: ignore
         #     scene_info = sceneLoadTypeCallbacks["DUSt3R"](args.source_path, args.images, args.eval, extra_opts=extra_opts) # type: ignore
-        if os.path.exists(os.path.join('/mnt/rcvnas2/datasets/soohong/omni3d_nukki/omni3d_mask/backpack_016', "sparse")): # type: ignore
-            scene_info = sceneLoadTypeCallbacks["Colmap"]('/mnt/rcvnas2/datasets/soohong/omni3d_nukki/omni3d_mask/backpack_016', args.images, args.eval, extra_opts=extra_opts) # type: ignore
+        if os.path.exists(os.path.join(f'/home/shk00315/cap_2/flash3d_2/data/omni3d/{image_name}', "sparse")): # type: ignore
+            scene_info = sceneLoadTypeCallbacks["Colmap"](f'/home/shk00315/cap_2/flash3d_2/data/omni3d/{image_name}', args.images, args.eval, extra_opts=extra_opts) # type: ignore
         elif os.path.exists(os.path.join(args.source_path, "transforms_alignz_train.json")): # type: ignore
             print("Found transforms_alignz_train.json file, assuming OpenIllumination data set!")
             scene_info = sceneLoadTypeCallbacks["OpenIllumination"](args.source_path, args.white_background, args.eval, extra_opts=extra_opts) # type: ignore
@@ -59,9 +59,9 @@ class Scene:
             camlist = []
             if scene_info.test_cameras:
                 camlist.extend(scene_info.test_cameras)
-            if scene_info.train_cameras:
+            if scene_info.train_cameras: # 통과
                 camlist.extend(scene_info.train_cameras)
-            if scene_info.render_cameras:
+            if scene_info.render_cameras: #통과
                 camlist.extend(scene_info.render_cameras)
             for id, cam in enumerate(camlist):
                 json_cams.append(camera_to_JSON(id, cam))

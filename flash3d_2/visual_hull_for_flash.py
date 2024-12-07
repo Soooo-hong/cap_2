@@ -68,16 +68,16 @@ def query_from_list_with_list(listA: list, listB: list):
     '''
     return [listB[i] for i in listA]
 
-def get_visual_hull(N, bbox, scene_info, cam_center,cam_info,idx):
+def get_visual_hull(N, bbox, scene_info, cam_center,cam_info):
     pcs = []
     color = []
     all_pts = []
     # 입력으로 들어오는 전체 단위로 하지 말고 outputs과 대응되는 image로 하기
-    Ks = scene_info.Ks[idx] # outputs[('K_src',0)]
-    Ts = scene_info.Ts[idx] # outputs[('cam_T_cam',frame_id,0)] -> frame_id가 현재 frame가 차이나는 정도(novel_view)
-    images = scene_info.images[idx]  
-    masks = scene_info.masks[idx] # superviesed 이기 때문에 기존 mask에서 index에 frame_id만큼 차이나는 것을 그냥 가져오기 
-    depths = scene_info.depths[idx] # outputs[('depth',0)] -> 배치크기만큼의 개수가 들어있음 (4) 
+    Ks = scene_info.Ks # outputs[('K_src',0)]
+    Ts = scene_info.Ts # outputs[('cam_T_cam',frame_id,0)] -> frame_id가 현재 frame가 차이나는 정도(novel_view)
+    images = scene_info.images  
+    masks = scene_info.masks # superviesed 이기 때문에 기존 mask에서 index에 frame_id만큼 차이나는 것을 그냥 가져오기 
+    depths = scene_info.depths # outputs[('depth',0)] -> 배치크기만큼의 개수가 들어있음 (4) 
 
     [xs, ys, zs], [xe, ye, ze] = bbox[0], bbox[1]
 
@@ -168,11 +168,11 @@ def get_visual_hull(N, bbox, scene_info, cam_center,cam_info,idx):
     bbox = pcd.get_axis_aligned_bounding_box()
     return pcd, bbox
 
-def save_images(pred, args) :
+def save_images(pred, data_dir,img_type) :
     for i in range(pred.shape[0]) : 
         file_name = f'pred_{i+1:05d}.png'
-        file_path = os.paht.join(args.data_dir,"images") 
-        file_path = os.path.join(args.data_dir, "images", file_name)  
+        file_path = os.paht.join(data_dir,img_type) 
+        file_path = os.path.join(data_dir, img_type, file_name)  
         image = pred[i].cpu().numpy()  
         image = np.clip(image * 255, 0, 255).astype(np.uint8)  
         img = Image.fromarray(image)  
@@ -201,13 +201,13 @@ def act_visual_hull(cfg,inputs,outputs,frame_id) :
     # we assume that the camera parameters are stored in the data_dir
     split_results = [item.split('/') for item in inputs[('frame_id',0)]]
     #selected_id에 새롭게 만든 outputs과 inputs의 index로 이루어진 list가 만들어져야됨 
-    selected_id = [int(idx) for _,idx in split_results]
 
     # scene_info랑 camlist를 다 읽지 말고 들어오는 것들에 대해서만 읽기 -> inputs값에서 가져온 것으로 읽기 
     # Ks: list    Ts: list images: list masks: list depths : list 가 scene_info에 들어있어야됨  
 
     scene_info = sceneLoadTypeCallbacks["Colmap"](os.path.join(cfg.dataset.data_path,split_results[0][0]), 'images', False, extra_opts=extra_opts) 
     camlist = cameraList_from_camInfos(scene_info.train_cameras, 1.0, extra_opts)
+    selected_id = np.arange(len(camlist))
 
     # if sparse id is not zero, we only use given frames to construct the visual hull
     # if cfg.dataset.sparse_id >= 0:
@@ -250,32 +250,40 @@ def act_visual_hull(cfg,inputs,outputs,frame_id) :
     masks = query_from_list_with_list(selected_id, masks_)
     depths = query_from_list_with_list(selected_id,depths)
     
-    new_Ks = []
-    new_Ts = []
-    new_iamges = []
-    new_masks = []
-    new_depths = []
-    for idx in range(cfg.data_loader.batch_size) : 
-        new_Ks.append((Ks[idx].to('cuda'),outputs[('K_src',0)][idx]))
-        new_Ts.append((Ts[idx].to('cuda'),outputs[('cam_T_cam',frame_id,0)][idx]))
-        new_iamges.append((images[idx].to('cuda'),outputs[('color_gauss',frame_id,0)][idx]))
-        new_masks.append((masks[idx].to('cuda'),masks_[selected_id[idx]+frame_id]))
-        new_depths.append((depths[idx].to('cuda'), outputs[(('depth',0))][idx]))
-    
-    # scene_info = SceneInfo(Ks, Ts, images, masks,depths) # 배치 사이즈 크기와 selected_id의 정보만 담겨있음 
-    scene_info = SceneInfo(new_Ks,new_Ts,new_iamges,new_masks,new_depths)
-    # Ks_clone = copy.deepcopy(Ks)
-    
-    bx = cfg.dataset.cube_size
-    init_bbox = [[cfg.dataset.cube_size_shift_x-bx, cfg.dataset.cube_size_shift_y-bx, cfg.dataset.cube_size_shift_z-bx], 
-                 [cfg.dataset.cube_size_shift_x+bx, cfg.dataset.cube_size_shift_y+bx, cfg.dataset.cube_size_shift_z+bx]]
-    # we run the get_visual_hull twice, first to get the bound, second to get the visual hull
-    # 아래의 과정을 (input image, output image)의 4쌍을 가지고 실행해야됨 
-    
+
     pcds = []
     bboxs = []
+
     for idx in range(cfg.data_loader.batch_size) : 
-        pcd, bbox = get_visual_hull(cfg.dataset.voxel_num, init_bbox, scene_info, cam_center,cam_info,idx)
+        # new_Ks.append((Ks[idx].to('cuda'),outputs[('K_src',0)][idx]))
+        # new_Ts.append((Ts[idx].to('cuda'),outputs[('cam_T_cam',frame_id,0)][idx]))
+        # new_iamges.append((images[idx].to('cuda'),outputs[('color_gauss',frame_id,0)][idx]))
+        # new_masks.append((masks[idx].to('cuda'),masks_[selected_id[idx]+frame_id]))
+        # new_depths.append((depths[idx].to('cuda'), outputs[(('depth',0))][idx]))
+        new_Ks = []
+        new_Ts = []
+        new_iamges = []
+        new_masks = []
+        new_depths = []
+
+        name_idx = int(inputs[('frame_id',0)][idx].split('/')[-1])
+        new_Ks.extend([inputs[('K_src',0)].to('cuda')[idx],outputs[('K_src',0)][idx]])
+        new_Ts.extend([inputs[('T_c2w',0)].to('cuda')[idx],outputs[('cam_T_cam',frame_id,0)][idx]])
+        new_iamges.extend([inputs[('color',0,0)].to('cuda')[idx],outputs[('color_gauss',frame_id,0)][idx]])
+        new_masks.extend([masks_[selected_id[name_idx]],masks_[selected_id[name_idx]+frame_id]])
+        new_depths.extend([depths[idx].to('cuda'), outputs[(('depth',0))][idx]])
+    
+        # scene_info = SceneInfo(Ks, Ts, images, masks,depths) # 배치 사이즈 크기와 selected_id의 정보만 담겨있음 
+        scene_info = SceneInfo(new_Ks,new_Ts,new_iamges,new_masks,new_depths)
+        # Ks_clone = copy.deepcopy(Ks)
+        
+        bx = cfg.dataset.cube_size
+        init_bbox = [[cfg.dataset.cube_size_shift_x-bx, cfg.dataset.cube_size_shift_y-bx, cfg.dataset.cube_size_shift_z-bx], 
+                    [cfg.dataset.cube_size_shift_x+bx, cfg.dataset.cube_size_shift_y+bx, cfg.dataset.cube_size_shift_z+bx]]
+        # we run the get_visual_hull twice, first to get the bound, second to get the visual hull
+        # 아래의 과정을 (input image, output image)의 4쌍을 가지고 실행해야됨 
+        
+        pcd, bbox = get_visual_hull(cfg.dataset.voxel_num, init_bbox, scene_info, cam_center,cam_info)
         
         # since we get the bound, we use this bound to better recon
         # we use the center of the bound as the center of the scene
@@ -294,7 +302,7 @@ def act_visual_hull(cfg,inputs,outputs,frame_id) :
         enlarged_bbox_min = center - scaled_extents / 2
         enlarged_bbox_max = center + scaled_extents / 2
 
-        pcd, bbox_new = get_visual_hull(64, [enlarged_bbox_min, enlarged_bbox_max], scene_info, [0,0,0],cam_info,idx)        
+        pcd, bbox_new = get_visual_hull(64, [enlarged_bbox_min, enlarged_bbox_max], scene_info, [0,0,0],cam_info)        
         pcds.append(pcd)
         bboxs.append(bbox_new)
         # save the pointcloud
@@ -304,18 +312,18 @@ def act_visual_hull(cfg,inputs,outputs,frame_id) :
             o3d.io.write_point_cloud(os.path.join(cfg.dataset.data_dir, "visual_hull_full.ply"), pcd)
 
         
-        if not cfg.dataset.not_vis:
-            Ts = np.array([i.cpu().numpy() for i in scene_info.Ts[idx]]) # 2개의 camera존재 
-            Ks_clone = copy.deepcopy(scene_info.Ks[idx])
+        # if not cfg.dataset.not_vis:
+        #     Ts = np.array([i.cpu().numpy() for i in scene_info.Ts[idx]]) # 2개의 camera존재 
+        #     Ks_clone = copy.deepcopy(scene_info.Ks[idx])
 
-            Ks = [k.cpu().numpy() if isinstance(k, torch.Tensor) else k for k in Ks_clone]
-            cameras = ct.camera.create_camera_frustums(Ks, Ts, highlight_color_map={0: [1, 0, 0], -1: [0, 1, 0]})
-            # build LineSet to represent the coordinate
-            world_coord = o3d.geometry.LineSet()
-            world_coord.points = o3d.utility.Vector3dVector(np.array([[0, 0, 0], [2, 0, 0], 
-                                                                    [0, 0, 0], [0, 2, 0], 
-                                                                    [0, 0, 0], [0, 0, 2]]))
-            world_coord.lines = o3d.utility.Vector2iVector(np.array([[0, 1], [0, 3], [0, 5]]))
-            # X->red, Y->green, Z->blue
-            world_coord.colors = o3d.utility.Vector3dVector(np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
-    return pcds
+        #     Ks = [k.cpu().numpy() if isinstance(k, torch.Tensor) else k for k in Ks_clone]
+        #     cameras = ct.camera.create_camera_frustums(Ks, Ts, highlight_color_map={0: [1, 0, 0], -1: [0, 1, 0]})
+        #     # build LineSet to represent the coordinate
+        #     world_coord = o3d.geometry.LineSet()
+        #     world_coord.points = o3d.utility.Vector3dVector(np.array([[0, 0, 0], [2, 0, 0], 
+        #                                                             [0, 0, 0], [0, 2, 0], 
+        #                                                             [0, 0, 0], [0, 0, 2]]))
+        #     world_coord.lines = o3d.utility.Vector2iVector(np.array([[0, 1], [0, 3], [0, 5]]))
+        #     # X->red, Y->green, Z->blue
+        #     world_coord.colors = o3d.utility.Vector3dVector(np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+    return pcds,split_results[0][0]

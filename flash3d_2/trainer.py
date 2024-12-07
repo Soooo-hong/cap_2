@@ -36,9 +36,9 @@ class Trainer(nn.Module):
         outputs = self.model.forward(inputs) # coarse gaussian으로 랜더링 
         #inputs이 배치단위로 들어옴 -> inputs[('frame_id',0)] = ['backpack_016/00174', 'backpack_016/00009', 'backpack_016/00148', 'backpack_016/00087'] 출력됨
         losses = self.compute_losses(inputs,outputs)
-        # fine_visual_hull = self.make_visual_hull(inputs,outputs) # fine gaussian으로 랜더링 
-        # visual_hull_loss = visual_hull_training(cfg.param,fine_visual_hull)
-        # losses["loss/total"]  = sum(visual_hull_loss)/len(visual_hull_loss)
+        fine_visual_hull,image_name = self.make_visual_hull(inputs,outputs) # fine gaussian으로 랜더링 
+        visual_hull_loss = visual_hull_training(cfg.param,fine_visual_hull,image_name)
+        losses["loss/total"]  = sum(visual_hull_loss)/len(visual_hull_loss)
         # losses = self.compute_losses(inputs, fine_outputs) #inputs과 fine_outputs의 loss계산 
         return losses, outputs
     
@@ -83,16 +83,22 @@ class Trainer(nn.Module):
         
         for frame_id in filtered_frame_ids : 
             # pred = outputs["color_gauss",frame_id,0] # novel view에서 rendering image 
-            visual_hull_result[frame_id] = act_visual_hull(cfg, inputs,outputs,frame_id) #--data_dir만 조정할 필요있음, input image와 저장된 pred 이미지는 sparse_txt2에 기록된 index로 접근
-        for i in range(len(visual_hull_result.keys())) : 
-            max_length = max(np.asarray(visual_hull_result[filtered_frame_ids[0]][i].points).shape[0], np.asarray(visual_hull_result[filtered_frame_ids[1]][i].points).shape[0], np.asarray(visual_hull_result[filtered_frame_ids[2]][i].points).shape[0])
-
+            visual_hull_result[frame_id],image_name = act_visual_hull(cfg, inputs,outputs,frame_id) #batch 단위로 나옴 , 각 pointcloud에서 points와 colors 뽑아내야됨 
+        for i in range(len(visual_hull_result.keys())) :
+            batch_list = []
+            for j in range(cfg.data_loader.batch_size) :  
+                max_point_length = max(np.asarray(visual_hull_result[filtered_frame_ids[0]][j].points).shape[0], np.asarray(visual_hull_result[filtered_frame_ids[1]][j].points).shape[0], np.asarray(visual_hull_result[filtered_frame_ids[2]][j].points).shape[0])
+                
             # visual_hull_results[f'points_{i}'] = torch.stack((pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[-1][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[1][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[2][i].points)),max_length)), dim=0)
             # visual_hull_results[f'color_{i}'] = torch.stack((pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[-1][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[1][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[2][i].points)),max_length)), dim=0)
-            visual_hull_results[f'points_{filtered_frame_ids[i]}'] = torch.cat((pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[0]][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[1]][i].points)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[2]][i].points)),max_length)), dim=0)
-            visual_hull_results[f'color_{filtered_frame_ids[i]}'] = torch.cat((pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[0]][i].colors)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[1]][i].colors)),max_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[2]][i].colors)),max_length)), dim=0)
+                batch_point = torch.cat((pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[0]][j].points)),max_point_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[1]][j].points)),max_point_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[2]][j].points)),max_point_length)), dim=0) 
+                batch_color = torch.cat((pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[0]][j].colors)),max_point_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[1]][j].colors)),max_point_length), pad_tensor(torch.from_numpy(np.asarray(visual_hull_result[filtered_frame_ids[2]][j].colors)),max_point_length)), dim=0)
+                batch_list.append((batch_point,batch_color))
+            visual_hull_results[f'points_{filtered_frame_ids[i]}'] = [batch_list[0][0],batch_list[1][0]]
+            visual_hull_results[f'color_{filtered_frame_ids[i]}'] = [batch_list[0][1],batch_list[1][1]]
             fine_visual_hull[filtered_frame_ids[i]] = ((visual_hull_results[f'points_{filtered_frame_ids[i]}'],visual_hull_results[f'color_{filtered_frame_ids[i]}']))
-        return fine_visual_hull
+            # fine_visual_hull은 -1,1,2가 key이고 각 키에는 key : ((b1_points,b2_points),(b1_colors,b2_colors))
+        return fine_visual_hull,image_name
             
     def compute_reconstruction_loss(self, pred, target, losses):
         """Computes reprojection loss between a batch of predicted and target images
